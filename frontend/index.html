@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lunar Rover — AI Sim</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        *{margin:0;padding:0;box-sizing:border-box}
+        :root{
+            --bg:#07090d;
+            --panel:#0d1117;
+            --border:rgba(255,255,255,0.07);
+            --cyan:#00c8ff;
+            --green:#00e87a;
+            --red:#ff4466;
+            --yellow:#ffcc00;
+            --muted:#4a5568;
+            --text:#9db5cc;
+        }
+        body{
+            background:var(--bg);
+            color:var(--text);
+            font-family:'Share Tech Mono',monospace;
+            height:100vh;display:flex;flex-direction:column;overflow:hidden;
+        }
+
+        /* ── TOP BAR ── */
+        #bar{
+            height:48px;flex-shrink:0;
+            background:var(--panel);
+            border-bottom:1px solid var(--border);
+            display:flex;align-items:center;gap:0;
+            position:relative;z-index:5;
+        }
+        .bar-logo{
+            padding:0 20px;
+            font-family:'Orbitron',sans-serif;
+            font-size:.85rem;font-weight:900;letter-spacing:3px;
+            color:var(--cyan);white-space:nowrap;
+        }
+        .bar-sep{width:1px;height:100%;background:var(--border);}
+        /* Mode pill */
+        #mode-pill{
+            margin:0 16px;padding:5px 14px;border-radius:20px;
+            font-size:.65rem;letter-spacing:2px;font-weight:700;
+            border:1px solid var(--muted);color:var(--muted);
+            transition:.3s;
+        }
+        #mode-pill.training{border-color:var(--yellow);color:var(--yellow);background:rgba(255,204,0,.08);}
+        #mode-pill.running {border-color:var(--green); color:var(--green); background:rgba(0,232,122,.08);}
+        /* Top stats */
+        .bar-stats{display:flex;gap:0;margin-left:auto;}
+        .bar-stat{
+            padding:0 20px;border-left:1px solid var(--border);
+            display:flex;flex-direction:column;justify-content:center;align-items:center;
+            line-height:1;gap:3px;
+        }
+        .bar-stat-label{font-size:.55rem;color:var(--muted);letter-spacing:2px;}
+        .bar-stat-val{font-family:'Orbitron',sans-serif;font-size:.95rem;color:#fff;}
+
+        /* ── MAIN ── */
+        #main{flex:1;display:flex;overflow:hidden;}
+
+        /* ── CANVAS ── */
+        #vp{flex:1;position:relative;overflow:hidden;}
+        #vp canvas{display:block;}
+
+        /* Outcome flash */
+        #outcome-flash{
+            position:absolute;inset:0;pointer-events:none;
+            opacity:0;transition:opacity .3s;
+        }
+        #outcome-flash.success{background:radial-gradient(circle,rgba(0,232,122,.18) 0%,transparent 70%);}
+        #outcome-flash.crater {background:radial-gradient(circle,rgba(255,68,102,.18) 0%,transparent 70%);}
+
+        /* HUD bottom-left */
+        #hud{
+            position:absolute;bottom:16px;left:16px;
+            background:rgba(7,9,13,.8);border:1px solid var(--border);
+            padding:10px 14px;border-radius:6px;pointer-events:none;
+            font-size:.68rem;line-height:2;
+        }
+        .hud-row{color:var(--muted);}
+        .hud-row b{color:var(--cyan);}
+
+        /* path trail toggle */
+        #trail-toggle{
+            position:absolute;top:14px;left:14px;
+            background:rgba(7,9,13,.75);border:1px solid var(--border);
+            color:var(--muted);font-family:'Share Tech Mono',monospace;
+            font-size:.65rem;letter-spacing:1px;padding:5px 10px;
+            border-radius:4px;cursor:pointer;transition:.2s;
+        }
+        #trail-toggle:hover{color:var(--cyan);border-color:var(--cyan);}
+
+        /* ── SIDE PANEL ── */
+        #panel{
+            width:260px;flex-shrink:0;
+            background:var(--panel);border-left:1px solid var(--border);
+            display:flex;flex-direction:column;overflow:hidden;
+        }
+
+        /* ── BIG ACTION BUTTONS ── */
+        #actions{
+            padding:16px;display:flex;flex-direction:column;gap:10px;
+            border-bottom:1px solid var(--border);
+        }
+        .action-btn{
+            padding:13px;border:1px solid transparent;border-radius:6px;
+            font-family:'Orbitron',sans-serif;font-size:.72rem;font-weight:700;
+            letter-spacing:2px;cursor:pointer;transition:.2s;
+            display:flex;align-items:center;justify-content:center;gap:8px;
+        }
+        #btn-train{
+            background:rgba(255,204,0,.08);border-color:var(--yellow);color:var(--yellow);
+        }
+        #btn-train:hover{background:rgba(255,204,0,.18);box-shadow:0 0 16px rgba(255,204,0,.2);}
+        #btn-run{
+            background:rgba(0,232,122,.08);border-color:var(--green);color:var(--green);
+        }
+        #btn-run:hover{background:rgba(0,232,122,.18);box-shadow:0 0 16px rgba(0,232,122,.2);}
+        .row-btns{display:flex;gap:8px;}
+        #btn-stop{
+            flex:1;padding:9px;border:1px solid var(--red);
+            background:rgba(255,68,102,.08);color:var(--red);
+            font-family:'Orbitron',sans-serif;font-size:.62rem;letter-spacing:2px;
+            border-radius:6px;cursor:pointer;transition:.2s;
+        }
+        #btn-stop:hover{background:rgba(255,68,102,.18);}
+        #btn-save{
+            flex:1;padding:9px;border:1px solid var(--border);
+            background:transparent;color:var(--muted);
+            font-family:'Orbitron',sans-serif;font-size:.62rem;letter-spacing:1px;
+            border-radius:6px;cursor:pointer;transition:.2s;
+        }
+        #btn-save:hover{border-color:var(--cyan);color:var(--cyan);}
+
+        /* Training progress */
+        #train-info{
+            padding:14px 16px;border-bottom:1px solid var(--border);
+            display:flex;flex-direction:column;gap:8px;
+        }
+        .ti-row{display:flex;justify-content:space-between;font-size:.7rem;}
+        .ti-label{color:var(--muted);}
+        .ti-val{color:#fff;}
+        /* ε bar */
+        .eps-track{
+            height:4px;background:rgba(255,255,255,.07);border-radius:2px;overflow:hidden;
+        }
+        .eps-fill{
+            height:100%;border-radius:2px;
+            background:linear-gradient(90deg,var(--green),var(--yellow),var(--red));
+            transition:width .4s;
+        }
+
+        /* Speed */
+        #speed-row{
+            padding:14px 16px;border-bottom:1px solid var(--border);
+        }
+        .sr-header{display:flex;justify-content:space-between;font-size:.65rem;margin-bottom:8px;}
+        .sr-header span:first-child{color:var(--muted);}
+        .sr-header span:last-child{color:var(--cyan);}
+        input[type=range]{
+            -webkit-appearance:none;width:100%;height:4px;
+            background:rgba(255,255,255,.1);border-radius:2px;outline:none;
+        }
+        input[type=range]::-webkit-slider-thumb{
+            -webkit-appearance:none;width:14px;height:14px;border-radius:50%;
+            background:var(--cyan);cursor:pointer;box-shadow:0 0 8px var(--cyan);
+        }
+
+        /* Chart */
+        #chart-section{flex:1;padding:14px 16px;display:flex;flex-direction:column;min-height:0;}
+        .sec-label{font-size:.6rem;letter-spacing:2px;color:var(--muted);margin-bottom:8px;}
+        #chartWrap{flex:1;min-height:0;}
+        #chartWrap canvas{width:100%!important;height:100%!important;}
+
+        /* Conn overlay */
+        #overlay{
+            position:fixed;inset:0;background:rgba(0,0,0,.85);
+            display:flex;flex-direction:column;align-items:center;justify-content:center;
+            gap:16px;z-index:99;transition:opacity .4s;
+        }
+        #overlay.gone{opacity:0;pointer-events:none;}
+        .spin{
+            width:40px;height:40px;border-radius:50%;
+            border:3px solid rgba(0,200,255,.2);border-top-color:var(--cyan);
+            animation:spin 1s linear infinite;
+        }
+        @keyframes spin{to{transform:rotate(360deg);}}
+        .ov-txt{font-family:'Orbitron',sans-serif;font-size:.8rem;letter-spacing:3px;color:var(--cyan);}
+        .ov-sub{font-size:.65rem;color:var(--muted);}
+    </style>
+</head>
+<body>
+
+<div id="js-error" style="display:none; position:fixed; z-index:9999; background:red; color:white; padding:20px; top:0; left:0; width:100%;"></div>
+<script>
+window.onerror = function(msg, url, line, col, error) {
+    var errDiv = document.getElementById('js-error');
+    errDiv.style.display = 'block';
+    errDiv.innerHTML += 'Error: ' + msg + ' at ' + line + ':' + col + '<br>';
+    return false;
+};
+</script>
+
+<div id="overlay">
+    <div class="spin"></div>
+    <div class="ov-txt">CONNECTING…</div>
+    <div class="ov-sub">Waiting for server on port 8000</div>
+</div>
+
+<!-- TOP BAR -->
+<div id="bar">
+    <div class="bar-logo">LUNAR ROVER</div>
+    <div class="bar-sep"></div>
+    <div id="mode-pill">IDLE</div>
+
+    <div class="bar-stats">
+        <div class="bar-stat">
+            <div class="bar-stat-label">EPISODE</div>
+            <div class="bar-stat-val" id="top-ep">0</div>
+        </div>
+        <div class="bar-stat">
+            <div class="bar-stat-label">TRAINED</div>
+            <div class="bar-stat-val" id="top-trained">0</div>
+        </div>
+        <div class="bar-stat">
+            <div class="bar-stat-label">REWARD</div>
+            <div class="bar-stat-val" id="top-reward">—</div>
+        </div>
+        <div class="bar-stat">
+            <div class="bar-stat-label">SUCCESS %</div>
+            <div class="bar-stat-val" id="top-success">—</div>
+        </div>
+    </div>
+</div>
+
+<!-- MAIN -->
+<div id="main">
+
+    <!-- 3D VIEWPORT -->
+    <div id="vp">
+        <div id="outcome-flash"></div>
+        <button id="trail-toggle">PATH: ON</button>
+        <div id="hud">
+            <div class="hud-row">ROVER  &nbsp;<b id="hud-rover">—</b></div>
+            <div class="hud-row">TARGET &nbsp;<b id="hud-target">—</b></div>
+            <div class="hud-row">DIST   &nbsp;<b id="hud-dist">—</b> cells</div>
+        </div>
+    </div>
+
+    <!-- SIDE PANEL -->
+    <div id="panel">
+
+        <!-- Map & Model Controls -->
+        <div id="model-controls" style="padding:16px; border-bottom:1px solid var(--border); display:flex; flex-direction:column; gap:10px;">
+            <button id="btn-new-map" class="action-btn" style="background:rgba(0,200,255,.08); border-color:var(--cyan); color:var(--cyan); font-size:0.65rem;">✨ NEW RANDOM MAP</button>
+            
+            <div style="display:flex; flex-direction:column; gap:4px; margin-top:8px;">
+                <label style="font-size:0.6rem; color:var(--muted); letter-spacing:1px;">LOAD MODEL</label>
+                <select id="model-select" style="background:rgba(0,0,0,.3); border:1px solid var(--border); color:var(--text); padding:6px; font-family:'Share Tech Mono',monospace; font-size:0.7rem; border-radius:4px; outline:none;">
+                    <option value="">-- Select Model --</option>
+                </select>
+            </div>
+            
+            <div class="row-btns">
+                <input type="text" id="model-name-input" placeholder="model_name" style="flex:2; background:rgba(0,0,0,.3); border:1px solid var(--border); color:var(--text); padding:6px; font-family:'Share Tech Mono',monospace; font-size:0.65rem; border-radius:4px; outline:none;">
+                <button id="btn-save" style="flex:1; padding:6px; border:1px solid var(--border); background:transparent; color:var(--muted); font-family:'Orbitron',sans-serif; font-size:0.55rem; letter-spacing:1px; border-radius:4px; cursor:pointer; transition:.2s;">💾 SAVE</button>
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div id="actions">
+            <button class="action-btn" id="btn-train">🧠 TRAIN AGENT</button>
+            <button class="action-btn" id="btn-run">▶ RUN TRAINED</button>
+            <button id="btn-stop" style="width:100%; padding:9px; border:1px solid var(--red); background:rgba(255,68,102,.08); color:var(--red); font-family:'Orbitron',sans-serif; font-size:.62rem; letter-spacing:2px; border-radius:6px; cursor:pointer; transition:.2s;">■ STOP</button>
+        </div>
+
+        <!-- Training Info -->
+        <div id="train-info">
+            <div class="ti-row"><span class="ti-label">Mode</span><span class="ti-val" id="ti-mode">IDLE</span></div>
+            <div class="ti-row"><span class="ti-label">Step</span><span class="ti-val" id="ti-step">0</span></div>
+            <div class="ti-row"><span class="ti-label">ε Explore</span><span class="ti-val" id="ti-eps">1.000</span></div>
+            <div class="eps-track"><div class="eps-fill" id="eps-fill" style="width:100%"></div></div>
+            <div class="ti-row" style="margin-top:4px">
+                <span class="ti-label">Last outcome</span>
+                <span class="ti-val" id="ti-outcome">—</span>
+            </div>
+        </div>
+
+        <!-- Speed -->
+        <div id="speed-row">
+            <div class="sr-header">
+                <span>SPEED</span>
+                <span id="speed-lbl">Normal</span>
+            </div>
+            <input type="range" id="speed-sl" min="0" max="0.9" step="0.01" value="0.12" dir="rtl">
+        </div>
+
+        <!-- Chart -->
+        <div id="chart-section">
+            <div class="sec-label">REWARD / EPISODE</div>
+            <div id="chartWrap"><canvas id="rwChart"></canvas></div>
+        </div>
+
+    </div>
+</div>
+
+<script src="/static/js/main.js?v=20240506_3"></script>
+</body>
+</html>
