@@ -10,10 +10,10 @@ echo    Powered by: Gymnasium + Q-Learning + Three.js
 echo  ============================================================
 echo.
 echo  [*] Checking dependencies...
-python -c "import fastapi, uvicorn, gymnasium, numpy" 2>nul
+python -c "import fastapi, uvicorn, websockets, gymnasium, numpy" 2>nul
 if %errorlevel% neq 0 (
     echo  [!] Installing required packages...
-    pip install fastapi uvicorn gymnasium numpy pygame -q
+    pip install fastapi "uvicorn[standard]" websockets gymnasium numpy pygame -q
 )
 echo  [+] Dependencies OK
 echo.
